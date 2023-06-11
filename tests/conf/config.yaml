@@ -1,0 +1,15 @@
+hydra:
+  run:
+    dir: logs/runs/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: logs/multiruns/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+  sweeper:
+    params:
+      +test: 0, 1, 2, 3, 4
+
+defaults:
+  - slurm: null
+  - override /hydra/launcher: submitit_slurm_extended
+  - _self_
+
