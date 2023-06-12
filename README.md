@@ -37,8 +37,12 @@ pip install hydra-submitit-extension
 
 ## Quickstart
 
+```
+python main.py hydra/launcher=submitit_slurm_extended -m
+```
 
-``` yaml
+All Parameter:
+``` yaml config.yaml
 # @package hydra.launcher
 
 # No changes to Submitit Launcher plugin
