@@ -2,11 +2,12 @@
 import logging
 import os
 import time
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Set, Optional, Sequence
 
 from hydra.core.singleton import Singleton
-from hydra.core.utils import JobReturn, filter_overrides, run_job, setup_globals
+from hydra.core.utils import JobReturn, filter_overrides, run_job, setup_globals, JobStatus
 from hydra.types import HydraContext, TaskFunction
 from omegaconf import DictConfig, OmegaConf, open_dict
 
@@ -177,7 +178,10 @@ class ExtendedSlurmLauncher(SlurmLauncher):
 
             for i in set(all_jobs) - finished_jobs: 
                 if i.state not in self.ACTIVE_JOB_STATES:
-                    i.results()
+                    result = i.result()
+                    if result.status != JobStatus.COMPLETED:
+                        sys.stderr.write(f"Error executing job with overrides: {result.overrides}" + os.linesep)
+                        raise result._return_value
                     finished_jobs.add(i)
 
             time.sleep(params["reschedule_interval"])
