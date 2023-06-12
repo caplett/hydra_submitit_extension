@@ -25,7 +25,7 @@ additional_parameters: {}
 array_parallelism: 256
 setup: null
 
-reschedule_interval: 5 
+reschedule_interval: 60
 max_jobs_in_partition: 4
 max_jobs_in_total: 5
 max_jobs_in_sweep: 3

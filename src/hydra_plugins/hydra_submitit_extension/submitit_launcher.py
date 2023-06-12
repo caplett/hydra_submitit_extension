@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Set, Optional, Sequence
 
 from hydra.core.singleton import Singleton
 from hydra.core.utils import JobReturn, filter_overrides, run_job, setup_globals
@@ -11,12 +11,14 @@ from hydra.types import HydraContext, TaskFunction
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from hydra_plugins.hydra_submitit_launcher.submitit_launcher import SlurmLauncher
+from submitit.core.core import Job
 from hydra_plugins.hydra_submitit_extension.config import ExtendedSlurmQueueConf
 from hydra_plugins.hydra_submitit_extension.utils.slurm_info import QueueInfo
 
 log = logging.getLogger(__name__)
 
 class ExtendedSlurmLauncher(SlurmLauncher):
+    ACTIVE_JOB_STATES = ["RUNNING","PENDING","UNKNOWN"]
 
     def __init__(self, **params: Any) -> None:
         self.params = {}
@@ -124,8 +126,9 @@ class ExtendedSlurmLauncher(SlurmLauncher):
             "max_jobs_in_total",
             "max_jobs_in_sweep"
         ]
+
         # Dont overrun the scheduler
-        # assert(params["reschedule_interval"]>=60)
+        assert(params["reschedule_interval"]>=60)
 
         executor_params = {k:v for k, v in params.items() if k not in extended_slurm_parameter}
 
@@ -141,6 +144,7 @@ class ExtendedSlurmLauncher(SlurmLauncher):
             mode = int(str(self.config.hydra.sweep.mode), 8)
             os.chmod(sweep_dir, mode=mode)
 
+        # Create jobs but do not start them
         job_params: List[Any] = []
         for idx, overrides in enumerate(job_overrides):
             idx = initial_job_idx + idx
@@ -156,21 +160,28 @@ class ExtendedSlurmLauncher(SlurmLauncher):
                 )
             )
 
-        jobs: List[Any] = []
+        all_jobs: List[Job] = []
+        finished_jobs: Set[Job] = set()
+
         while len(job_params)!=0:
-            while sum([j.state in ["RUNNING","PENDING","UNKNOWN"] for j in jobs ]) < params["max_jobs_in_sweep"]: 
+            while sum([j.state in self.ACTIVE_JOB_STATES for j in all_jobs ]) < params["max_jobs_in_sweep"]: 
                 if len(job_params)!=0:
                     queue_info = QueueInfo()
                     if queue_info.getTotalJobs() < params["max_jobs_in_total"]:
                         if queue_info.getJobsInPartition(params["partition"]) < params["max_jobs_in_partition"]:
                             jp = job_params.pop(0)
-                            jobs.append(executor.submit(self, *jp))
+                            all_jobs.append(executor.submit(self, *jp))
                             log.info(f"\t#{jp[2]} : Scheduled")
                 else:
                     break
 
+            for i in set(all_jobs) - finished_jobs: 
+                if i.state not in self.ACTIVE_JOB_STATES:
+                    i.results()
+                    finished_jobs.add(i)
+
             time.sleep(params["reschedule_interval"])
 
-        return [j.results()[0] for j in jobs]
+        return [j.results()[0] for j in all_jobs]
 
 
