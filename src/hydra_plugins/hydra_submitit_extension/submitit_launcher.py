@@ -1,15 +1,13 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import logging
 import os
 import time
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Optional, Sequence
+from typing import Any, List, Set, Sequence
 
 from hydra.core.singleton import Singleton
-from hydra.core.utils import JobReturn, filter_overrides, run_job, setup_globals, JobStatus
-from hydra.types import HydraContext, TaskFunction
-from omegaconf import DictConfig, OmegaConf, open_dict
+from hydra.core.utils import JobReturn, filter_overrides, JobStatus
+from omegaconf import OmegaConf
 
 from hydra_plugins.hydra_submitit_launcher.submitit_launcher import SlurmLauncher
 from submitit.core.core import Job
@@ -20,70 +18,6 @@ log = logging.getLogger(__name__)
 
 class ExtendedSlurmLauncher(SlurmLauncher):
     ACTIVE_JOB_STATES = ["RUNNING","PENDING","UNKNOWN"]
-
-    def __init__(self, **params: Any) -> None:
-        self.params = {}
-        for k, v in params.items():
-            if OmegaConf.is_config(v):
-                v = OmegaConf.to_container(v, resolve=True)
-            self.params[k] = v
-
-        self.config: Optional[DictConfig] = None
-        self.task_function: Optional[TaskFunction] = None
-        self.sweep_configs: Optional[TaskFunction] = None
-        self.hydra_context: Optional[HydraContext] = None
-
-    def setup(
-        self,
-        *,
-        hydra_context: HydraContext,
-        task_function: TaskFunction,
-        config: DictConfig,
-    ) -> None:
-        self.config = config
-        self.hydra_context = hydra_context
-        self.task_function = task_function
-
-    def __call__(
-        self,
-        sweep_overrides: List[str],
-        job_dir_key: str,
-        job_num: int,
-        job_id: str,
-        singleton_state: Dict[type, Singleton],
-    ) -> JobReturn:
-        # lazy import to ensure plugin discovery remains fast
-        import submitit
-
-        assert self.hydra_context is not None
-        assert self.config is not None
-        assert self.task_function is not None
-
-        Singleton.set_state(singleton_state)
-        setup_globals()
-        sweep_config = self.hydra_context.config_loader.load_sweep_config(
-            self.config, sweep_overrides
-        )
-
-        with open_dict(sweep_config.hydra.job) as job:
-            # Populate new job variables
-            job.id = submitit.JobEnvironment().job_id  # type: ignore
-            sweep_config.hydra.job.num = job_num
-
-        return run_job(
-            hydra_context=self.hydra_context,
-            task_function=self.task_function,
-            config=sweep_config,
-            job_dir_key=job_dir_key,
-            job_subdir_key="hydra.sweep.subdir",
-        )
-
-    def checkpoint(self, *args: Any, **kwargs: Any) -> Any:
-        """Resubmit the current callable at its current state with the same initial arguments."""
-        # lazy import to ensure plugin discovery remains fast
-        import submitit
-
-        return submitit.helpers.DelayedSubmission(self, *args, **kwargs)
 
     def launch(
         self, job_overrides: Sequence[Sequence[str]], initial_job_idx: int

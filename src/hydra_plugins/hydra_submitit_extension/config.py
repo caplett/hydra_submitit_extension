@@ -1,6 +1,5 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from hydra.core.config_store import ConfigStore
 
