@@ -107,6 +107,10 @@ class ExtendedSlurmLauncher(SlurmLauncher):
                             jp = job_params.pop(0)
                             all_jobs.append(executor.submit(self, *jp))
                             log.info(f"\t#{jp[2]} : Scheduled")
+                        else:
+                            break
+                    else:
+                        break
                     # Dont overrun the scheduler
                     time.sleep(1)
                 else:
